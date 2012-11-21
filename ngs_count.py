@@ -204,7 +204,7 @@ class Feature(BaseFeature):
         ]))
 
     @classmethod
-    def fromLine(cls, line, nbins):
+    def fromLine(cls, line):
         l = line.strip().split('\t')
         attributes = {}
         if len(l) > 8:
@@ -212,10 +212,7 @@ class Feature(BaseFeature):
             for i in a:
                 k, v = i.split('=')
                 attributes[k] = v
-        return cls(
-            l[0], l[1], l[2], int(l[3]), int(l[4]), l[5], l[6], l[7],
-            attributes, nbins=nbins
-        )
+        return cls(l[0], l[1], l[2], int(l[3]), int(l[4]), l[5], l[6], l[7], attributes)
 
     def formatAttributes(self):
         return ';'.join(['='.join([k, v]) for k, v in self.attributes.iteritems()])
@@ -236,10 +233,10 @@ class ProfilesCollection(list):
         return '\n'.join([str(i) for i in self])
 
 
-def parseAnnotation(filename, nbins):
+def parseAnnotation(filename):
     annotation = {}
     with open(filename, 'r') as infile:
-        for feature in (Feature.fromLine(line, nbins=nbins) for line in infile):
+        for feature in (Feature.fromLine(line) for line in infile):
             if feature.seqid in annotation:
                 annotation[feature.seqid].append(feature)
             else:
@@ -253,9 +250,8 @@ def main(args):
         global_params={
             'infile': args.infile,
             'outfile': args.outfile,
-            'annotation': parseAnnotation(args.annotation, args.bins),
+            'annotation': parseAnnotation(args.annotation),
             'norm': args.norm,
-            'collapse': args.collapse,
             'fraction': args.fraction,
             'exclude_ambiguous': args.exclude_ambiguous
         },
