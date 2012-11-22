@@ -4,7 +4,7 @@
 import sys
 import argparse
 import random
-from bisect import bisect_right, bisect_left
+import bisect
 from multiworkers.multiworker import Controller, Worker
 
 
@@ -58,34 +58,19 @@ class MyWorker(Worker):
         features.sort(key=lambda x: x.end)
         return features
 
-    def find_le(self, a, x):
-        i = bisect_right(a, x)
-        if i:
-            return i - 1
-        raise ValueError
-
-    def find_ge(self, a, x):
-        i = bisect_left(a, x)
-        if i != len(a):
-            return i
-        raise ValueError
-
-    def __find_features_overlaped_by_read(self, read, findex, rindex):
-        try:
-            up_index = self.find_le([e.start for e in findex], read.start)
-            down_index = self.find_ge([e.end for e in rindex], read.end)
-        except ValueError:
-            return []
-        down_features = set(findex[up_index:])
-        up_features = set(rindex[:down_index + 1])
-        return up_features & down_features 
+    def __features_encompassing_read(self, read, findex, rindex):
+        up_index = bisect.bisect_right([e.start for e in findex], read.start)
+        down_index = bisect.bisect_left([e.end for e in rindex], read.end)
+        up_features = set(findex[:up_index])
+        down_features = set(rindex[down_index:])
+        return up_features & down_features
 
     def do(self, job):
         current_seqid_annot = self.global_params['annotation'].get(job['seqid'], [])
         findex = self.__ascending_index(current_seqid_annot)
         rindex = self.__descending_index(current_seqid_annot)
         for read in self.__load_reads(job['offset']):
-            matching_features = self.__find_features_overlaped_by_read(read, findex, rindex)
+            matching_features = self.__features_encompassing_read(read, findex, rindex)
             if self.global_params['exclude_ambiguous'] is False or \
                     (self.global_params['exclude_ambiguous'] and len(matching_features) < 2):
                 for feature in matching_features:
