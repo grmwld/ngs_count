@@ -48,6 +48,22 @@ class MyWorker(Worker):
         else:
             return self.__load_fraction_reads(offset, pick_proba)
 
+    def __get_overlap_method(self):
+        if self.global_params['overlap_method'] == 'full':
+            return self.__overlap_method_full
+        elif self.global_params['overlap_method'] == 'partial':
+            return self.__overlap_method_partial
+
+    def __overlap_method_full(self, read, findex, rindex):
+        up_index = bisect.bisect_right([e.start for e in findex], read.start)
+        down_index = bisect.bisect_left([e.end for e in rindex], read.end)
+        return (up_index, down_index)
+
+    def __overlap_method_partial(self, read, findex, rindex):
+        up_index = bisect.bisect_right([e.start for e in findex], read.end)
+        down_index = bisect.bisect_left([e.end for e in rindex], read.start)
+        return (up_index, down_index)
+
     def __ascending_index(self, feats):
         features = feats[:]
         features.sort(key=lambda x: x.start)
@@ -58,9 +74,8 @@ class MyWorker(Worker):
         features.sort(key=lambda x: x.end)
         return features
 
-    def __features_encompassing_read(self, read, findex, rindex):
-        up_index = bisect.bisect_right([e.start for e in findex], read.start)
-        down_index = bisect.bisect_left([e.end for e in rindex], read.end)
+    def __features_encompassing_read(self, read, findex, rindex, method):
+        up_index, down_index = method(read, findex, rindex)
         up_features = set(findex[:up_index])
         down_features = set(rindex[down_index:])
         return up_features & down_features
@@ -69,8 +84,9 @@ class MyWorker(Worker):
         current_seqid_annot = self.global_params['annotation'].get(job['seqid'], [])
         findex = self.__ascending_index(current_seqid_annot)
         rindex = self.__descending_index(current_seqid_annot)
+        overlap_method = self.__get_overlap_method()
         for read in self.__load_reads(job['offset']):
-            matching_features = self.__features_encompassing_read(read, findex, rindex)
+            matching_features = self.__features_encompassing_read(read, findex, rindex, overlap_method)
             if self.global_params['exclude_ambiguous'] is False or \
                     (self.global_params['exclude_ambiguous'] and len(matching_features) < 2):
                 for feature in matching_features:
@@ -238,7 +254,8 @@ def main(args):
             'annotation': parseAnnotation(args.annotation),
             'norm': args.norm,
             'fraction': args.fraction,
-            'exclude_ambiguous': args.exclude_ambiguous
+            'exclude_ambiguous': args.exclude_ambiguous,
+            'overlap_method': args.overlap_method
         },
         num_cpu=args.num_cpu,
         quiet=args.quiet,
@@ -277,6 +294,12 @@ if __name__ == '__main__':
         action='store_true',
         default=False,
         help='Should reads overlapping multiple features be excluded.'
+    )
+    parser.add_argument(
+        '-t', '--overlap_method', dest='overlap_method',
+        choices=['full', 'partial'],
+        default='full',
+        help='Method to use for determining overlap of a read with a feature'
     )
     parser.add_argument(
         '-f', '--fraction', dest='fraction',
