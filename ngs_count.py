@@ -279,6 +279,12 @@ if __name__ == '__main__':
         help='Should reads overlapping multiple features be excluded.'
     )
     parser.add_argument(
+        '-t', '--overlap_method', dest='overlap_method',
+        choices=['full', 'partial'],
+        default='full',
+        help='Method to use for determining overlap of a read with a feature'
+    )
+    parser.add_argument(
         '-f', '--fraction', dest='fraction',
         type=float,
         default=1.0,
