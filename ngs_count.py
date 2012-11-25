@@ -54,19 +54,22 @@ class MyWorker(Worker):
         elif self.global_params['overlap_method'] == 'partial':
             return self.__overlap_method_partial
 
-    def __ascending_index(self, feats):
-        features = feats[:]
-        features.sort(key=lambda x: x.start)
-        return features
+    def __overlap_method_full(self, read, findex, rindex):
+        up_index = bisect.bisect_right([e.start for e in findex], read.start)
+        down_index = bisect.bisect_left([e.end for e in rindex], read.end)
+        return (up_index, down_index)
 
-    def __descending_index(self, feats):
+    def __overlap_method_partial(self, read, findex, rindex):
+        up_index = bisect.bisect_right([e.start for e in findex], read.end)
+        down_index = bisect.bisect_left([e.end for e in rindex], read.start)
+        return (up_index, down_index)
+
         features = feats[:]
         features.sort(key=lambda x: x.end)
         return features
 
-    def __features_encompassing_read(self, read, findex, rindex):
-        up_index = bisect.bisect_right([e.start for e in findex], read.start)
-        down_index = bisect.bisect_left([e.end for e in rindex], read.end)
+    def __features_encompassing_read(self, read, findex, rindex, method):
+        up_index, down_index = method(read, findex, rindex)
         up_features = set(findex[:up_index])
         down_features = set(rindex[down_index:])
         return up_features & down_features
@@ -77,7 +80,7 @@ class MyWorker(Worker):
         rindex = self.__descending_index(current_seqid_annot)
         overlap_method = self.__get_overlap_method()
         for read in self.__load_reads(job['offset']):
-            matching_features = self.__features_encompassing_read(read, findex, rindex)
+            matching_features = self.__features_encompassing_read(read, findex, rindex, overlap_method)
             if self.global_params['exclude_ambiguous'] is False or \
                     (self.global_params['exclude_ambiguous'] and len(matching_features) < 2):
                 for feature in matching_features:
