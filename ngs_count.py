@@ -48,6 +48,12 @@ class MyWorker(Worker):
         else:
             return self.__load_fraction_reads(offset, pick_proba)
 
+    def __get_overlap_method(self):
+        if self.global_params['overlap_method'] == 'full':
+            return self.__overlap_method_full
+        elif self.global_params['overlap_method'] == 'partial':
+            return self.__overlap_method_partial
+
     def __ascending_index(self, feats):
         features = feats[:]
         features.sort(key=lambda x: x.start)
@@ -69,6 +75,7 @@ class MyWorker(Worker):
         current_seqid_annot = self.global_params['annotation'].get(job['seqid'], [])
         findex = self.__ascending_index(current_seqid_annot)
         rindex = self.__descending_index(current_seqid_annot)
+        overlap_method = self.__get_overlap_method()
         for read in self.__load_reads(job['offset']):
             matching_features = self.__features_encompassing_read(read, findex, rindex)
             if self.global_params['exclude_ambiguous'] is False or \
@@ -238,7 +245,8 @@ def main(args):
             'annotation': parseAnnotation(args.annotation),
             'norm': args.norm,
             'fraction': args.fraction,
-            'exclude_ambiguous': args.exclude_ambiguous
+            'exclude_ambiguous': args.exclude_ambiguous,
+            'overlap_method': args.overlap_method
         },
         num_cpu=args.num_cpu,
         quiet=args.quiet,
