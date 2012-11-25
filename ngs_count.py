@@ -64,6 +64,12 @@ class MyWorker(Worker):
         down_index = bisect.bisect_left([e.end for e in rindex], read.start)
         return (up_index, down_index)
 
+    def __ascending_index(self, feats):
+        features = feats[:]
+        features.sort(key=lambda x: x.start)
+        return features
+
+    def __descending_index(self, feats):
         features = feats[:]
         features.sort(key=lambda x: x.end)
         return features
