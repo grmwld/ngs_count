@@ -90,7 +90,7 @@ class MyWorker(Worker):
             if self.global_params['exclude_ambiguous'] is False or \
                     (self.global_params['exclude_ambiguous'] and len(matching_features) < 2):
                 for feature in matching_features:
-                    feature.add(read, self.global_params['norm'])
+                    feature.add(read)
         return {
             'seqid': job['seqid'],
             'offset': job['offset'],
@@ -183,13 +183,20 @@ class Read(BaseFeature):
 
 class Feature(BaseFeature):
     def __init__(self, seqid, source, method, start, end, score, strand, phase,
-                 attributes):
+                 attributes, norm, lib_size):
         BaseFeature.__init__(self, seqid, start, end, strand)
         self.source = source
         self.method = method
         self.phase = phase
         self.attributes = attributes
         self.score = 0.0
+        self.norm_factor = 1
+        if norm == 'feat_length':
+            self.norm_factor = self.length / 1000.0
+        elif norm == 'lib_size':
+            self.norm_factor = lib_size / 1000000
+        elif norm == 'rpkm':
+            self.norm_factor = (self.length / 1000.0) * (lib_size / 1000000)
 
     def __str__(self):
         return '\t'.join(map(str, [
@@ -205,7 +212,7 @@ class Feature(BaseFeature):
         ]))
 
     @classmethod
-    def fromLine(cls, line):
+    def fromLine(cls, line, norm, lib_size):
         l = line.strip().split('\t')
         attributes = {}
         if len(l) > 8:
@@ -213,17 +220,16 @@ class Feature(BaseFeature):
             for i in a:
                 k, v = i.split('=')
                 attributes[k] = v
-        return cls(l[0], l[1], l[2], int(l[3]), int(l[4]), l[5], l[6], l[7], attributes)
+        return cls(l[0], l[1], l[2], int(l[3]), int(l[4]), l[5], l[6], l[7], attributes, norm, lib_size)
 
     def formatAttributes(self):
         return ';'.join(['='.join([k, v]) for k, v in self.attributes.iteritems()])
 
-    def add(self, read, norm):
-        self.increment(read, norm)
+    def add(self, read):
+        self.increment(read)
 
-    def increment(self, read, norm):
-        norm_factor = self.length if norm else 1
-        self.score += 1.0 / norm_factor
+    def increment(self, read):
+        self.score += 1.0 / self.norm_factor
 
 
 class ProfilesCollection(list):
@@ -234,10 +240,10 @@ class ProfilesCollection(list):
         return '\n'.join([str(i) for i in self])
 
 
-def parseAnnotation(filename):
+def parseAnnotation(filename, norm, lib_size):
     annotation = {}
     with open(filename, 'r') as infile:
-        for feature in (Feature.fromLine(line) for line in infile):
+        for feature in (Feature.fromLine(line, norm, lib_size) for line in infile):
             if feature.seqid in annotation:
                 annotation[feature.seqid].append(feature)
             else:
@@ -245,14 +251,23 @@ def parseAnnotation(filename):
     return annotation
 
 
+def count_lines(infile):
+    c = 0
+    infile.seek(0)
+    for line in infile:
+        c += 1
+    infile.seek(0)
+    return c
+
+
 def main(args):
+    lib_size = 0 if args.norm in [False, 'feat_length'] else count_lines(args.infile)
     controller = MyController(
         jobs={},
         global_params={
             'infile': args.infile,
             'outfile': args.outfile,
-            'annotation': parseAnnotation(args.annotation),
-            'norm': args.norm,
+            'annotation': parseAnnotation(args.annotation, args.norm, lib_size),
             'fraction': args.fraction,
             'exclude_ambiguous': args.exclude_ambiguous,
             'overlap_method': args.overlap_method
@@ -309,9 +324,9 @@ if __name__ == '__main__':
     )
     parser.add_argument(
         '-n', '--norm', dest='norm',
-        action='store_true',
+        choices=['feat_length', 'lib_size', 'rpkm'],
         default=False,
-        help="normalize by size"
+        help="normalize by feature length, library size, or both"
     )
     parser.add_argument(
         '-q', '--quiet', dest='quiet',
