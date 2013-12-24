@@ -101,7 +101,7 @@ class MyWorker(Worker):
 class MyController(Controller):
     def __init__(self, jobs, global_params, num_cpu=1, quiet=False,
                  worker_class=MyWorker, debug=False):
-        jobs = (job for job in self.index_infile(global_params['infile']))
+        jobs = [job for job in self.index_infile(global_params['infile'])]
         Controller.__init__(self, jobs, global_params, num_cpu=num_cpu,
                             quiet=quiet, worker_class=worker_class,
                             debug=debug)
